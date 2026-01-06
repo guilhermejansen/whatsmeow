@@ -1001,13 +1001,22 @@ func getButtonAttributes(msg *waE2E.Message) waBinary.Attrs {
 		}
 	case msg.InteractiveMessage != nil:
 		isPaymentInfoButton := false
+		isReviewAndPayButton := false
 		for _, button := range msg.InteractiveMessage.GetNativeFlowMessage().GetButtons() {
-			if button.GetName() == "payment_info" {
+			switch button.GetName() {
+			case "payment_info":
 				isPaymentInfoButton = true
-				break
+			case "review_and_pay":
+				isReviewAndPayButton = true
 			}
 		}
 		if isPaymentInfoButton {
+			return waBinary.Attrs{
+				"v":    "1",
+				"type": "native_flow",
+			}
+		}
+		if isReviewAndPayButton {
 			return waBinary.Attrs{
 				"v":    "1",
 				"type": "native_flow",
@@ -1033,10 +1042,13 @@ func getButtonContent(msg *waE2E.Message) []waBinary.Node {
 	case msg.InteractiveMessage != nil:
 		buttons := msg.InteractiveMessage.GetNativeFlowMessage().GetButtons()
 		isPaymentInfoButton := false
+		isReviewAndPayButton := false
 		for _, button := range buttons {
-			if button.GetName() == "payment_info" {
+			switch button.GetName() {
+			case "payment_info":
 				isPaymentInfoButton = true
-				break
+			case "review_and_pay":
+				isReviewAndPayButton = true
 			}
 		}
 		if isPaymentInfoButton {
@@ -1046,15 +1058,22 @@ func getButtonContent(msg *waE2E.Message) []waBinary.Node {
 					"name": "payment_info",
 				},
 			}}
-		} else {
+		}
+		if isReviewAndPayButton {
 			return []waBinary.Node{{
 				Tag: "native_flow",
 				Attrs: waBinary.Attrs{
-					"v":    "2",
-					"name": "mixed",
+					"name": "order_details",
 				},
 			}}
 		}
+		return []waBinary.Node{{
+			Tag: "native_flow",
+			Attrs: waBinary.Attrs{
+				"v":    "2",
+				"name": "mixed",
+			},
+		}}
 	default:
 		return nil
 	}
