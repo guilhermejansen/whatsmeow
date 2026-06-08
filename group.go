@@ -455,10 +455,11 @@ func (cli *Client) JoinGroupWithInvite(ctx context.Context, jid, inviter types.J
 // GetGroupInfoFromLink resolves the given invite link and asks the WhatsApp servers for info about the group.
 // This will not cause the user to join the group.
 func (cli *Client) GetGroupInfoFromLink(ctx context.Context, code string) (*types.GroupInfo, error) {
-	code = strings.TrimPrefix(code, InviteLinkPrefix)
 	resp, err := cli.sendGroupIQ(ctx, iqGet, types.GroupServerJID, waBinary.Node{
-		Tag:   "invite",
-		Attrs: waBinary.Attrs{"code": code},
+		Tag: "invite",
+		Attrs: waBinary.Attrs{
+			"code": stripURLPrefix(code, InviteLinkPrefix),
+		},
 	})
 	if errors.Is(err, ErrIQGone) {
 		return nil, wrapIQError(ErrInviteLinkRevoked, err)
@@ -476,10 +477,11 @@ func (cli *Client) GetGroupInfoFromLink(ctx context.Context, code string) (*type
 
 // JoinGroupWithLink joins the group using the given invite link.
 func (cli *Client) JoinGroupWithLink(ctx context.Context, code string) (types.JID, error) {
-	code = strings.TrimPrefix(code, InviteLinkPrefix)
 	resp, err := cli.sendGroupIQ(ctx, iqSet, types.GroupServerJID, waBinary.Node{
-		Tag:   "invite",
-		Attrs: waBinary.Attrs{"code": code},
+		Tag: "invite",
+		Attrs: waBinary.Attrs{
+			"code": stripURLPrefix(code, InviteLinkPrefix),
+		},
 	})
 	if errors.Is(err, ErrIQGone) {
 		return types.EmptyJID, wrapIQError(ErrInviteLinkRevoked, err)
@@ -711,7 +713,7 @@ func (cli *Client) parseGroupNode(groupNode *waBinary.Node) (*types.GroupInfo, e
 	group.NameSetBy = ag.OptionalJIDOrEmpty("s_o")
 	group.NameSetByPN = ag.OptionalJIDOrEmpty("s_o_pn")
 
-	group.GroupCreated = ag.UnixTime("creation")
+	group.GroupCreated = ag.OptionalUnixTime("creation")
 	group.CreatorCountryCode = ag.OptionalString("creator_country_code")
 
 	group.AnnounceVersionID = ag.OptionalString("a_v_id")
