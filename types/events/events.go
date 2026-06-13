@@ -495,8 +495,8 @@ type GroupInfo struct {
 	MembershipRequestsRevoked []types.JID // Users whose membership requests were revoked
 	MembershipRequestMethod   string      // How the membership request was created (invite_link, non_admin_add, etc.)
 
-	Suspended      bool        // whether the group is suspended
-	Unsuspended    bool        // whether the group is unsuspended
+	Suspended      bool // whether the group is suspended
+	Unsuspended    bool // whether the group is unsuspended
 	UnknownChanges []*waBinary.Node
 }
 
