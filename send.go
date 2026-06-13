@@ -609,6 +609,164 @@ func (cli *Client) BuildEdit(chat types.JID, id types.MessageID, newContent *waE
 	}
 }
 
+// BuildReply wraps replyContent so it quotes the message identified by quotedInfo and quotedMsg.
+//
+// quotedMsg is embedded as a stripped copy (principal content only, nested QuotedMessage cleared).
+// Plain Conversation reply content is promoted to ExtendedTextMessage. ContextInfo already set
+// on replyContent (mentions, forwarding flags) is preserved. Returns ErrUnsupportedReplyType if
+// replyContent has no field that accepts a ContextInfo.
+//
+//	reply, err := cli.BuildReply(&evt.Info, evt.Message, &waE2E.Message{
+//		Conversation: proto.String("answering"),
+//	})
+func (cli *Client) BuildReply(quotedInfo *types.MessageInfo, quotedMsg, replyContent *waE2E.Message) (*waE2E.Message, error) {
+	if quotedInfo == nil || quotedMsg == nil || replyContent == nil {
+		return nil, errors.New("BuildReply: quotedInfo, quotedMsg and replyContent must all be non-nil")
+	}
+	if replyContent.Conversation != nil && replyContent.ExtendedTextMessage == nil {
+		text := replyContent.GetConversation()
+		replyContent.Conversation = nil
+		replyContent.ExtendedTextMessage = &waE2E.ExtendedTextMessage{Text: proto.String(text)}
+	}
+	ci := &waE2E.ContextInfo{
+		StanzaID:      proto.String(quotedInfo.ID),
+		Participant:   proto.String(cli.replyParticipant(quotedInfo).String()),
+		QuotedMessage: stripQuotedMessage(quotedMsg),
+	}
+	if err := attachQuotedContext(replyContent, ci); err != nil {
+		return nil, err
+	}
+	return replyContent, nil
+}
+
+func (cli *Client) replyParticipant(info *types.MessageInfo) types.JID {
+	if info.IsFromMe {
+		if info.Sender.Server == types.HiddenUserServer {
+			return cli.getOwnLID().ToNonAD()
+		}
+		return cli.getOwnID().ToNonAD()
+	}
+	return info.Sender.ToNonAD()
+}
+
+func stripQuotedMessage(msg *waE2E.Message) *waE2E.Message {
+	switch {
+	case msg.Conversation != nil:
+		return &waE2E.Message{Conversation: proto.String(msg.GetConversation())}
+	case msg.ExtendedTextMessage != nil:
+		et := clearNestedQuote(proto.Clone(msg.ExtendedTextMessage).(*waE2E.ExtendedTextMessage))
+		if extendedTextOnlyHasText(et) {
+			return &waE2E.Message{Conversation: proto.String(et.GetText())}
+		}
+		return &waE2E.Message{ExtendedTextMessage: et}
+	case msg.ImageMessage != nil:
+		return &waE2E.Message{ImageMessage: clearNestedQuote(proto.Clone(msg.ImageMessage).(*waE2E.ImageMessage))}
+	case msg.VideoMessage != nil:
+		return &waE2E.Message{VideoMessage: clearNestedQuote(proto.Clone(msg.VideoMessage).(*waE2E.VideoMessage))}
+	case msg.AudioMessage != nil:
+		return &waE2E.Message{AudioMessage: clearNestedQuote(proto.Clone(msg.AudioMessage).(*waE2E.AudioMessage))}
+	case msg.DocumentMessage != nil:
+		return &waE2E.Message{DocumentMessage: clearNestedQuote(proto.Clone(msg.DocumentMessage).(*waE2E.DocumentMessage))}
+	case msg.StickerMessage != nil:
+		return &waE2E.Message{StickerMessage: clearNestedQuote(proto.Clone(msg.StickerMessage).(*waE2E.StickerMessage))}
+	case msg.LocationMessage != nil:
+		return &waE2E.Message{LocationMessage: clearNestedQuote(proto.Clone(msg.LocationMessage).(*waE2E.LocationMessage))}
+	case msg.LiveLocationMessage != nil:
+		return &waE2E.Message{LiveLocationMessage: clearNestedQuote(proto.Clone(msg.LiveLocationMessage).(*waE2E.LiveLocationMessage))}
+	case msg.ContactMessage != nil:
+		return &waE2E.Message{ContactMessage: clearNestedQuote(proto.Clone(msg.ContactMessage).(*waE2E.ContactMessage))}
+	case msg.ContactsArrayMessage != nil:
+		return &waE2E.Message{ContactsArrayMessage: clearNestedQuote(proto.Clone(msg.ContactsArrayMessage).(*waE2E.ContactsArrayMessage))}
+	case msg.PollCreationMessage != nil:
+		return &waE2E.Message{PollCreationMessage: clearNestedQuote(proto.Clone(msg.PollCreationMessage).(*waE2E.PollCreationMessage))}
+	case msg.ButtonsMessage != nil:
+		return &waE2E.Message{ButtonsMessage: clearNestedQuote(proto.Clone(msg.ButtonsMessage).(*waE2E.ButtonsMessage))}
+	case msg.ListMessage != nil:
+		return &waE2E.Message{ListMessage: clearNestedQuote(proto.Clone(msg.ListMessage).(*waE2E.ListMessage))}
+	case msg.InteractiveMessage != nil:
+		return &waE2E.Message{InteractiveMessage: clearNestedQuote(proto.Clone(msg.InteractiveMessage).(*waE2E.InteractiveMessage))}
+	case msg.GroupInviteMessage != nil:
+		return &waE2E.Message{GroupInviteMessage: clearNestedQuote(proto.Clone(msg.GroupInviteMessage).(*waE2E.GroupInviteMessage))}
+	case msg.ProductMessage != nil:
+		return &waE2E.Message{ProductMessage: clearNestedQuote(proto.Clone(msg.ProductMessage).(*waE2E.ProductMessage))}
+	default:
+		return proto.Clone(msg).(*waE2E.Message)
+	}
+}
+
+func clearNestedQuote[T interface{ GetContextInfo() *waE2E.ContextInfo }](sub T) T {
+	if ci := sub.GetContextInfo(); ci != nil {
+		ci.QuotedMessage = nil
+	}
+	return sub
+}
+
+func extendedTextOnlyHasText(et *waE2E.ExtendedTextMessage) bool {
+	if et == nil || et.Text == nil {
+		return false
+	}
+	cp := proto.Clone(et).(*waE2E.ExtendedTextMessage)
+	cp.Text = nil
+	cp.ContextInfo = nil
+	return proto.Equal(cp, &waE2E.ExtendedTextMessage{})
+}
+
+func attachQuotedContext(msg *waE2E.Message, ci *waE2E.ContextInfo) error {
+	switch {
+	case msg.ExtendedTextMessage != nil:
+		msg.ExtendedTextMessage.ContextInfo = mergeQuotedCtx(msg.ExtendedTextMessage.ContextInfo, ci)
+	case msg.ImageMessage != nil:
+		msg.ImageMessage.ContextInfo = mergeQuotedCtx(msg.ImageMessage.ContextInfo, ci)
+	case msg.VideoMessage != nil:
+		msg.VideoMessage.ContextInfo = mergeQuotedCtx(msg.VideoMessage.ContextInfo, ci)
+	case msg.AudioMessage != nil:
+		msg.AudioMessage.ContextInfo = mergeQuotedCtx(msg.AudioMessage.ContextInfo, ci)
+	case msg.DocumentMessage != nil:
+		msg.DocumentMessage.ContextInfo = mergeQuotedCtx(msg.DocumentMessage.ContextInfo, ci)
+	case msg.StickerMessage != nil:
+		msg.StickerMessage.ContextInfo = mergeQuotedCtx(msg.StickerMessage.ContextInfo, ci)
+	case msg.LocationMessage != nil:
+		msg.LocationMessage.ContextInfo = mergeQuotedCtx(msg.LocationMessage.ContextInfo, ci)
+	case msg.LiveLocationMessage != nil:
+		msg.LiveLocationMessage.ContextInfo = mergeQuotedCtx(msg.LiveLocationMessage.ContextInfo, ci)
+	case msg.ContactMessage != nil:
+		msg.ContactMessage.ContextInfo = mergeQuotedCtx(msg.ContactMessage.ContextInfo, ci)
+	case msg.ContactsArrayMessage != nil:
+		msg.ContactsArrayMessage.ContextInfo = mergeQuotedCtx(msg.ContactsArrayMessage.ContextInfo, ci)
+	case msg.PollCreationMessage != nil:
+		msg.PollCreationMessage.ContextInfo = mergeQuotedCtx(msg.PollCreationMessage.ContextInfo, ci)
+	case msg.ButtonsMessage != nil:
+		msg.ButtonsMessage.ContextInfo = mergeQuotedCtx(msg.ButtonsMessage.ContextInfo, ci)
+	case msg.ListMessage != nil:
+		msg.ListMessage.ContextInfo = mergeQuotedCtx(msg.ListMessage.ContextInfo, ci)
+	case msg.InteractiveMessage != nil:
+		msg.InteractiveMessage.ContextInfo = mergeQuotedCtx(msg.InteractiveMessage.ContextInfo, ci)
+	case msg.GroupInviteMessage != nil:
+		msg.GroupInviteMessage.ContextInfo = mergeQuotedCtx(msg.GroupInviteMessage.ContextInfo, ci)
+	case msg.ProductMessage != nil:
+		msg.ProductMessage.ContextInfo = mergeQuotedCtx(msg.ProductMessage.ContextInfo, ci)
+	default:
+		return ErrUnsupportedReplyType
+	}
+	return nil
+}
+
+func mergeQuotedCtx(existing, incoming *waE2E.ContextInfo) *waE2E.ContextInfo {
+	if existing == nil {
+		return incoming
+	}
+	if existing.StanzaID == nil {
+		existing.StanzaID = incoming.StanzaID
+	}
+	if existing.Participant == nil {
+		existing.Participant = incoming.Participant
+	}
+	if existing.QuotedMessage == nil {
+		existing.QuotedMessage = incoming.QuotedMessage
+	}
+	return existing
+}
+
 const (
 	DisappearingTimerOff     = time.Duration(0)
 	DisappearingTimer24Hours = 24 * time.Hour
@@ -980,6 +1138,114 @@ func getMediaTypeFromMessage(msg *waE2E.Message) string {
 	}
 }
 
+// buildBizNode constructs the <biz> envelope for native_flow interactive messages.
+// Dispatches on the first native_flow button's Name (review_and_pay, payment_info,
+// mpm, cta_catalog, send_location, call_permission_request, wa_payment_transaction_details,
+// automated_greeting_message_view_catalog) or falls back to a generic native_flow envelope.
+func buildBizNode(msg *waE2E.Message, buttonType string) waBinary.Node {
+	privacyTS := strconv.FormatInt(time.Now().Unix(), 10)
+
+	firstButtonName := ""
+	if msg.InteractiveMessage != nil {
+		if nf := msg.InteractiveMessage.GetNativeFlowMessage(); nf != nil {
+			if buttons := nf.GetButtons(); len(buttons) > 0 {
+				firstButtonName = buttons[0].GetName()
+			}
+		}
+	}
+
+	if firstButtonName == "review_and_pay" || firstButtonName == "payment_info" {
+		name := firstButtonName
+		if firstButtonName == "review_and_pay" {
+			name = "order_details"
+		}
+		return waBinary.Node{
+			Tag:   "biz",
+			Attrs: waBinary.Attrs{"native_flow_name": name},
+		}
+	}
+
+	nativeFlowSpecials := []string{
+		"mpm", "cta_catalog", "send_location",
+		"call_permission_request", "wa_payment_transaction_details",
+		"automated_greeting_message_view_catalog",
+	}
+	for _, s := range nativeFlowSpecials {
+		if firstButtonName == s {
+			return waBinary.Node{
+				Tag: "biz",
+				Attrs: waBinary.Attrs{
+					"actual_actors":   "2",
+					"host_storage":    "2",
+					"privacy_mode_ts": privacyTS,
+				},
+				Content: []waBinary.Node{
+					{
+						Tag:   "interactive",
+						Attrs: waBinary.Attrs{"type": "native_flow", "v": "1"},
+						Content: []waBinary.Node{
+							{Tag: "native_flow", Attrs: waBinary.Attrs{"v": "2", "name": firstButtonName}},
+						},
+					},
+					{Tag: "quality_control", Attrs: waBinary.Attrs{"source_type": "third_party"}},
+				},
+			}
+		}
+	}
+
+	if buttonType == "list" {
+		return waBinary.Node{
+			Tag: "biz",
+			Attrs: waBinary.Attrs{
+				"actual_actors":   "2",
+				"host_storage":    "2",
+				"privacy_mode_ts": privacyTS,
+			},
+			Content: []waBinary.Node{
+				{Tag: "list", Attrs: waBinary.Attrs{"v": "2", "type": "product_list"}},
+				{Tag: "quality_control", Attrs: waBinary.Attrs{"source_type": "third_party"}},
+			},
+		}
+	}
+
+	return waBinary.Node{
+		Tag: "biz",
+		Attrs: waBinary.Attrs{
+			"actual_actors":   "2",
+			"host_storage":    "2",
+			"privacy_mode_ts": privacyTS,
+		},
+		Content: []waBinary.Node{
+			{
+				Tag:   "interactive",
+				Attrs: waBinary.Attrs{"type": "native_flow", "v": "1"},
+				Content: []waBinary.Node{
+					{Tag: "native_flow", Attrs: waBinary.Attrs{"v": "9", "name": "mixed"}},
+				},
+			},
+			{Tag: "quality_control", Attrs: waBinary.Attrs{"source_type": "third_party"}},
+		},
+	}
+}
+
+// hasInteractiveNativeFlow reports whether the message contains an InteractiveMessage
+// with a non-nil NativeFlowMessage (including wrapped via ViewOnce/Ephemeral).
+func hasInteractiveNativeFlow(msg *waE2E.Message) bool {
+	if msg == nil {
+		return false
+	}
+	if msg.ViewOnceMessage != nil {
+		return hasInteractiveNativeFlow(msg.ViewOnceMessage.GetMessage())
+	}
+	if msg.ViewOnceMessageV2 != nil {
+		return hasInteractiveNativeFlow(msg.ViewOnceMessageV2.GetMessage())
+	}
+	if msg.EphemeralMessage != nil {
+		return hasInteractiveNativeFlow(msg.EphemeralMessage.GetMessage())
+	}
+	return msg.InteractiveMessage != nil && msg.InteractiveMessage.GetNativeFlowMessage() != nil
+}
+
 func getButtonTypeFromMessage(msg *waE2E.Message) string {
 	switch {
 	case msg.ViewOnceMessage != nil:
@@ -1219,11 +1485,22 @@ func (cli *Client) getMessageContent(
 	if extraParams.metaNode != nil {
 		content = append(content, *extraParams.metaNode)
 	}
+	// If the caller already attached <biz>/<hsm> via additionalNodes, skip our injection.
+	callerProvidedBiz := false
 	if extraParams.additionalNodes != nil {
-		content = append(content, *extraParams.additionalNodes...)
+		for _, n := range *extraParams.additionalNodes {
+			if n.Tag == "biz" || n.Tag == "hsm" {
+				callerProvidedBiz = true
+				break
+			}
+		}
 	}
 
-	if buttonType := getButtonTypeFromMessage(message); buttonType != "" {
+	buttonType := getButtonTypeFromMessage(message)
+
+	if !callerProvidedBiz && hasInteractiveNativeFlow(message) {
+		content = append(content, buildBizNode(message, buttonType))
+	} else if !callerProvidedBiz && buttonType != "" {
 		if buttonType == "list" {
 			content = append(content, waBinary.Node{
 				Tag: "biz",
@@ -1242,6 +1519,10 @@ func (cli *Client) getMessageContent(
 				}},
 			})
 		}
+	}
+
+	if extraParams.additionalNodes != nil {
+		content = append(content, *extraParams.additionalNodes...)
 	}
 
 	return content

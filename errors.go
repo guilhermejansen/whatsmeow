@@ -266,3 +266,15 @@ func (err *DisconnectedError) Is(other error) bool {
 	}
 	return otherDisc.Action == err.Action
 }
+
+// Errors for call control and reply helpers
+var (
+	// ErrUnsupportedReplyType is returned by Client.BuildReply when the reply content has no field that accepts a ContextInfo (e.g. reactions, protocol messages).
+	ErrUnsupportedReplyType = errors.New("reply content type has no ContextInfo field")
+
+	// ErrCallMakeNotImplemented is returned by Client.MakeCall: originating a call requires a WebRTC media stack not available in this build.
+	ErrCallMakeNotImplemented = errors.New("MakeCall not implemented")
+
+	// ErrCatalogUnavailable is returned by Client.GetCatalog / GetProducts / GetCollections when the catalog read stanza is unavailable.
+	ErrCatalogUnavailable = errors.New("business catalog unavailable")
+)

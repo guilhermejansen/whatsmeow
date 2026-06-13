@@ -119,3 +119,72 @@ func (cli *Client) RejectCall(ctx context.Context, callFrom types.JID, callID st
 		}},
 	})
 }
+
+// PreAcceptCall sends a <preaccept> stanza for an incoming call (ringing).
+// Must be followed by <accept> or <reject>; an idle preaccept can lead to throttling.
+func (cli *Client) PreAcceptCall(ctx context.Context, callFrom types.JID, callID string) error {
+	ownID := cli.getOwnID()
+	if ownID.IsEmpty() {
+		return ErrNotLoggedIn
+	}
+	ownID, callFrom = ownID.ToNonAD(), callFrom.ToNonAD()
+	return cli.sendNode(ctx, waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": cli.GenerateMessageID(), "from": ownID, "to": callFrom},
+		Content: []waBinary.Node{{
+			Tag:     "preaccept",
+			Attrs:   waBinary.Attrs{"call-id": callID, "call-creator": callFrom, "count": "0"},
+			Content: nil,
+		}},
+	})
+}
+
+// AcceptCall sends an <accept> stanza for an incoming call.
+// The full handshake needs WebRTC media; calling this without a backing
+// media stack will cause the call to time out and may trigger throttling.
+func (cli *Client) AcceptCall(ctx context.Context, callFrom types.JID, callID string) error {
+	ownID := cli.getOwnID()
+	if ownID.IsEmpty() {
+		return ErrNotLoggedIn
+	}
+	ownID, callFrom = ownID.ToNonAD(), callFrom.ToNonAD()
+	return cli.sendNode(ctx, waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": cli.GenerateMessageID(), "from": ownID, "to": callFrom},
+		Content: []waBinary.Node{{
+			Tag:     "accept",
+			Attrs:   waBinary.Attrs{"call-id": callID, "call-creator": callFrom, "count": "0"},
+			Content: nil,
+		}},
+	})
+}
+
+// TerminateCall sends a <terminate> stanza. Reason defaults to "hangup" when empty.
+func (cli *Client) TerminateCall(ctx context.Context, callFrom types.JID, callID string, reason string) error {
+	ownID := cli.getOwnID()
+	if ownID.IsEmpty() {
+		return ErrNotLoggedIn
+	}
+	if reason == "" {
+		reason = "hangup"
+	}
+	ownID, callFrom = ownID.ToNonAD(), callFrom.ToNonAD()
+	return cli.sendNode(ctx, waBinary.Node{
+		Tag:   "call",
+		Attrs: waBinary.Attrs{"id": cli.GenerateMessageID(), "from": ownID, "to": callFrom},
+		Content: []waBinary.Node{{
+			Tag:     "terminate",
+			Attrs:   waBinary.Attrs{"call-id": callID, "call-creator": callFrom, "reason": reason},
+			Content: nil,
+		}},
+	})
+}
+
+// MakeCall originates an outbound call.
+// Not yet implemented; returns ErrCallMakeNotImplemented.
+func (cli *Client) MakeCall(ctx context.Context, to types.JID, video bool) error {
+	_ = ctx
+	_ = to
+	_ = video
+	return ErrCallMakeNotImplemented
+}
