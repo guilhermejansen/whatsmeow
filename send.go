@@ -881,10 +881,24 @@ func (cli *Client) sendNewsletter(
 			plaintextNode.Attrs["mediatype"] = mediaType
 		}
 	}
+	// Channels require a <meta polltype="creation|vote"/> child node for polls.
+	// Without it the server rejects the stanza with smax-invalid (479). The
+	// official app sends <message type="poll"><meta polltype="creation"/><plaintext/>…
+	// (same polltype meta that prepareMessageNodeV3 in sendfb.go builds for the
+	// encrypted path). contenttype is optional — only present when the poll
+	// carries an image — so we omit it for plain polls.
+	content := make([]waBinary.Node, 0, 2)
+	if pollType := getNewsletterPollType(message); pollType != "" {
+		content = append(content, waBinary.Node{
+			Tag:   "meta",
+			Attrs: waBinary.Attrs{"polltype": pollType},
+		})
+	}
+	content = append(content, plaintextNode)
 	node := waBinary.Node{
 		Tag:     "message",
 		Attrs:   attrs,
-		Content: []waBinary.Node{plaintextNode},
+		Content: content,
 	}
 	start = time.Now()
 	data, err := cli.sendNodeAndGetData(ctx, node)
@@ -893,6 +907,26 @@ func (cli *Client) sendNewsletter(
 		return nil, fmt.Errorf("failed to send message node: %w", err)
 	}
 	return data, nil
+}
+
+// getNewsletterPollType returns the polltype value for the <meta> node of a
+// newsletter (channel) poll message: "creation" for a new poll, "vote" for a
+// poll update, or "" when the message is not a poll. Newsletter poll stanzas
+// require this meta node or the server rejects them with smax-invalid (479).
+// Mirrors the polltype logic in prepareMessageNodeV3 (sendfb.go) for the
+// encrypted DM/group path.
+func getNewsletterPollType(msg *waE2E.Message) string {
+	if msg == nil {
+		return ""
+	}
+	switch {
+	case msg.PollCreationMessage != nil:
+		return "creation"
+	case msg.PollUpdateMessage != nil:
+		return "vote"
+	default:
+		return ""
+	}
 }
 
 type nodeExtraParams struct {
@@ -1117,6 +1151,11 @@ func getMediaTypeFromMessage(msg *waE2E.Message) string {
 		} else {
 			return "video"
 		}
+	case msg.PtvMessage != nil:
+		// Video note (round video). Channels accept it as mediatype="ptv"
+		// (CDN exposes newsletter-ptv); without this the newsletter plaintext
+		// node carries a media_id but type="text"/no mediatype → smax-invalid (479).
+		return "ptv"
 	case msg.ContactMessage != nil:
 		return "vcard"
 	case msg.ContactsArrayMessage != nil:
