@@ -342,6 +342,12 @@ func (cli *Client) SendMessage(ctx context.Context, to types.JID, message *waE2E
 		}
 		resp.DebugTimings.LIDFetch = time.Since(start)
 		cli.Log.Debugf("Replacing SendMessage destination with LID as migration timestamp is set %s -> %s", to, toLID)
+		// Realign embedded message keys (reaction / revoke / poll-update target) with the
+		// rewritten LID identity. Strict clients (notably iOS) correlate these actions to their
+		// target message by key.RemoteJID exactly; a phone-number key delivered under a
+		// LID-addressed thread is silently dropped, while Android/Web leniently merge PN<->LID.
+		// See remapEmbeddedKeyJID.
+		remapEmbeddedKeyJID(message, to, toLID)
 		to = toLID
 		ownID = cli.getOwnLID()
 	}
@@ -533,6 +539,32 @@ func (cli *Client) BuildReaction(chat, sender types.JID, id types.MessageID, rea
 			SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
 		},
 	}
+}
+
+// remapEmbeddedKeyJID rewrites the RemoteJID of any MessageKey embedded in message — the
+// reaction target, the protocol-message target used by revoke/edit, and the poll-update
+// target — from oldJID to newJID.
+//
+// It is used when SendMessage rewrites the destination from a phone number to a LID during
+// LID migration: the embedded target key must follow the same identity as the envelope,
+// otherwise clients that validate the addressing strictly (notably iOS) cannot correlate the
+// action with its target message and silently drop it (Android/Web leniently merge PN<->LID).
+// It is a no-op when the message carries no embedded key, when the two addresses are equal, or
+// when the embedded key points at a different chat than the send destination.
+func remapEmbeddedKeyJID(message *waE2E.Message, oldJID, newJID types.JID) {
+	if message == nil || oldJID.IsEmpty() || newJID.IsEmpty() || oldJID.String() == newJID.String() {
+		return
+	}
+	old := oldJID.String()
+	updated := newJID.String()
+	remap := func(key *waCommon.MessageKey) {
+		if key != nil && key.GetRemoteJID() == old {
+			key.RemoteJID = proto.String(updated)
+		}
+	}
+	remap(message.GetReactionMessage().GetKey())
+	remap(message.GetProtocolMessage().GetKey())
+	remap(message.GetPollUpdateMessage().GetPollCreationMessageKey())
 }
 
 // BuildUnavailableMessageRequest builds a message to request the user's primary device to send
