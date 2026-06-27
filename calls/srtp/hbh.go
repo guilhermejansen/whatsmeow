@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/rs/zerolog"
+
 	"go.mau.fi/whatsmeow/calls/util"
 )
 

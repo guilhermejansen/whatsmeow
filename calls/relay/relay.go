@@ -132,7 +132,7 @@ func ConnectRelayMedia(relayAddr *net.UDPAddr, opts ...Option) (*RelayMediaChann
 	// Source of truth: https://github.com/oxidezap/whatsapp-rust/blob/41095d4e6ba4610e054e9ede3af1d5e88a83faee/src/voip/transport.rs#L136-L195
 	cfg := resolveConfig(opts)
 	lg := cfg.log
-	lg.Debug().Str("relay_addr", relayAddr.String()).Msg("connecting relay media stack")
+	lg.Debug().Stringer("relay_addr", relayAddr).Msg("connecting relay media stack")
 	// Roll back already-allocated resources if a later step fails.
 	var cleanup []func() error
 	fail := func(err error) (*RelayMediaChannel, error) {

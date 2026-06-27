@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog"
+
 	waBinary "go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/types"
 )

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+
 	"go.mau.fi/whatsmeow/calls/util"
 )
 

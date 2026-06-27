@@ -11,13 +11,14 @@ import (
 	"strings"
 	"sync"
 
+	"google.golang.org/protobuf/proto"
+
 	"go.mau.fi/whatsmeow"
 	waBinary "go.mau.fi/whatsmeow/binary"
 	"go.mau.fi/whatsmeow/calls/signaling"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
-	"google.golang.org/protobuf/proto"
 )
 
 // engine is the internal media + signaling engine behind Client/Call. It owns the
@@ -155,7 +156,7 @@ func (e *engine) placeCall(ctx context.Context, target string) (*Call, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.c.log.Info().Str("peer_lid", peerLID.String()).Str("self_lid", self.String()).Msg("resolved peer LID")
+	e.c.log.Info().Stringer("peer_lid", peerLID).Stringer("self_lid", self).Msg("resolved peer LID")
 
 	devices, err := cli.GetUserDevices(ctx, []types.JID{peerLID})
 	if err != nil {

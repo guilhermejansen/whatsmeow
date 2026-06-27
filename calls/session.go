@@ -2,6 +2,7 @@ package calls
 
 import (
 	"github.com/rs/zerolog"
+
 	"go.mau.fi/whatsmeow/types"
 
 	"go.mau.fi/whatsmeow/calls/rtp"
@@ -54,7 +55,7 @@ func NewOutgoingSession(callID string, peerJID, callCreator types.JID, opts ...O
 		phase:       CallPhaseIdle,
 		log:         resolveConfig(opts).log,
 	}
-	s.log.Debug().Str("call_id", callID).Str("peer_jid", peerJID.String()).Str("direction", "outgoing").Msg("call session created")
+	s.log.Debug().Str("call_id", callID).Stringer("peer_jid", peerJID).Str("direction", "outgoing").Msg("call session created")
 	return s
 }
 
@@ -69,7 +70,7 @@ func NewIncomingSession(callID string, peerJID, callCreator types.JID, opts ...O
 		phase:       CallPhaseRinging,
 		log:         resolveConfig(opts).log,
 	}
-	s.log.Debug().Str("call_id", callID).Str("peer_jid", peerJID.String()).Str("direction", "incoming").Msg("call session created")
+	s.log.Debug().Str("call_id", callID).Stringer("peer_jid", peerJID).Str("direction", "incoming").Msg("call session created")
 	return s
 }
 

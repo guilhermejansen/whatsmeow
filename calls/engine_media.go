@@ -60,7 +60,7 @@ func (e *engine) connectAndAllocate(ctx context.Context, rd *relayData) (*relay.
 		return nil, nil, fmt.Errorf("relay has no usable endpoint")
 	}
 	addr := &net.UDPAddr{IP: net.ParseIP(ep.addresses[0].ipv4), Port: int(ep.addresses[0].port)}
-	log.Info().Str("relay_name", ep.relayName).Str("addr", addr.String()).Msg("connecting media transport to relay")
+	log.Info().Str("relay_name", ep.relayName).Stringer("addr", addr).Msg("connecting media transport to relay")
 	e.c.diag.Emit("relay", map[string]any{
 		"event": "endpoint", "relay_name": ep.relayName,
 		"ipv4": ep.addresses[0].ipv4, "port": ep.addresses[0].port, "token_id": ep.tokenID,

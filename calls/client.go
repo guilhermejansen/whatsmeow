@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/calls/diag"
 )

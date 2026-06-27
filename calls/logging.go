@@ -2,6 +2,7 @@ package calls
 
 import (
 	"github.com/rs/zerolog"
+
 	"go.mau.fi/whatsmeow/calls/diag"
 )
 
