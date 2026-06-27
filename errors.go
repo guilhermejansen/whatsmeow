@@ -272,7 +272,12 @@ var (
 	// ErrUnsupportedReplyType is returned by Client.BuildReply when the reply content has no field that accepts a ContextInfo (e.g. reactions, protocol messages).
 	ErrUnsupportedReplyType = errors.New("reply content type has no ContextInfo field")
 
-	// ErrCallMakeNotImplemented is returned by Client.MakeCall: originating a call requires a WebRTC media stack not available in this build.
+	// ErrCallMakeNotImplemented is retained for backwards compatibility.
+	//
+	// Deprecated: Client.MakeCall now sends a real call offer and no longer returns
+	// this error. For media (audio/video) calls use the go.mau.fi/whatsmeow/calls
+	// package. This variable is no longer returned by any method and will be removed
+	// in a future release.
 	ErrCallMakeNotImplemented = errors.New("MakeCall not implemented")
 
 	// ErrCatalogUnavailable is returned by Client.GetCatalog / GetProducts / GetCollections when the catalog read stanza is unavailable.

@@ -120,6 +120,14 @@ type Client struct {
 	eventHandlers     []wrappedEventHandler
 	eventHandlersLock sync.RWMutex
 
+	// callNodeHandler is the optional low-level interceptor for raw <call> and
+	// <ack class="call"> nodes, installed via RegisterCallNodeHandler. It lets a
+	// media/calls layer (e.g. go.mau.fi/whatsmeow/calls) see the raw binary node —
+	// including the stanza id and the <ack class="call" type="offer"> relay
+	// allocation that the parsed call events and the default ack path drop. Stored
+	// atomically so registration never races the receive loop.
+	callNodeHandler atomic.Pointer[CallNodeHandler]
+
 	messageRetries     map[string]int
 	messageRetriesLock sync.Mutex
 	retrySema          *semaphore.Weighted
@@ -285,10 +293,15 @@ func NewClient(deviceStore *store.Device, log waLog.Logger) *Client {
 	}
 	cli.paired.Store(deviceStore.ID != nil)
 	cli.nodeHandlers = map[string]nodeHandler{
-		"message":      cli.handleEncryptedMessage,
-		"appdata":      cli.handleEncryptedMessage,
-		"receipt":      cli.handleReceipt,
-		"call":         cli.handleCallEvent,
+		"message": cli.handleEncryptedMessage,
+		"appdata": cli.handleEncryptedMessage,
+		"receipt": cli.handleReceipt,
+		"call":    cli.handleCallEvent,
+		// whatsmeow has no general <ack> handling — ack nodes are otherwise dropped.
+		// handleAckNode is a no-op for every ack except <ack class="call">, which it
+		// forwards to a registered call-node handler (the outbound-call relay
+		// allocation arrives only inside <ack class="call" type="offer">).
+		"ack":          cli.handleAckNode,
 		"chatstate":    cli.handleChatState,
 		"presence":     cli.handlePresence,
 		"notification": cli.handleNotification,
