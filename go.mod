@@ -8,6 +8,12 @@ require (
 	github.com/beeper/argo-go v1.1.2
 	github.com/coder/websocket v1.8.15
 	github.com/google/uuid v1.6.0
+	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/pion/datachannel v1.6.0
+	github.com/pion/dtls/v3 v3.1.2
+	github.com/pion/logging v0.2.4
+	github.com/pion/opus v0.1.0
+	github.com/pion/sctp v1.9.4
 	github.com/rs/zerolog v1.35.1
 	go.mau.fi/libsignal v0.2.2
 	go.mau.fi/util v0.9.10
@@ -23,6 +29,8 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
+	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/sys v0.46.0 // indirect
