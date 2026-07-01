@@ -5,9 +5,8 @@ import (
 	"crypto/cipher"
 	"errors"
 
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/util"
+	"github.com/rs/zerolog"
 )
 
 // errShortKey is returned when the supplied key material is shorter than the

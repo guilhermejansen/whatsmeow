@@ -4,10 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/rs/zerolog"
-
-	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/calls/diag"
+	"github.com/rs/zerolog"
+	"go.mau.fi/whatsmeow"
 )
 
 // Client is the managed entry point to the WhatsApp 1:1 calling stack. It wraps a
@@ -53,22 +52,6 @@ func (c *Client) OnIncomingCall(fn func(*Call)) {
 	c.mu.Lock()
 	c.onIncomingCall = fn
 	c.mu.Unlock()
-}
-
-// AbortAll ends every in-flight call immediately, tearing down each call's media
-// and firing its OnEnd listener with reason. The Client stays installed and can
-// place or receive new calls afterwards — use it to drop all active calls without
-// detaching from the underlying whatsmeow client (e.g. on a transient network drop).
-func (c *Client) AbortAll(reason string) {
-	c.eng.abortAll(reason)
-}
-
-// Close tears the call Client down: it aborts all in-flight calls (firing each
-// Call's OnEnd with "client closed") and detaches the low-level whatsmeow handlers
-// installed by NewClient. Call it when the underlying whatsmeow client disconnects
-// for good; the Client must not be used after Close.
-func (c *Client) Close() {
-	c.eng.close("client closed")
 }
 
 // incomingCallHandler returns the registered inbound-call listener, or nil.

@@ -5,9 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/util"
+	"github.com/rs/zerolog"
 )
 
 // errBadHbhKeyLen is returned when the hop-by-hop key is not exactly 30 bytes,

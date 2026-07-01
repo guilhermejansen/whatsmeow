@@ -6,9 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/util"
+	"github.com/rs/zerolog"
 )
 
 // errBadCallKeyLen is returned when the call key is not exactly 32 bytes, the only

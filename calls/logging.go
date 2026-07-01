@@ -1,9 +1,8 @@
 package calls
 
 import (
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/diag"
+	"github.com/rs/zerolog"
 )
 
 // Option configures optional, non-behavioral aspects of the call/media types —

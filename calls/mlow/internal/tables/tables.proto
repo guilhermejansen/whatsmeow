@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mlow.tables;
 
-option go_package = "go.mau.fi/whatsmeow/calls/mlow/internal/tables";
+option go_package = "github.com/purpshell/meowcaller/mlow/internal/tables";
 
 // The embedded MLow heap window: the runtime-built table regions plus the
 // table-base pointers. Stored zlib-compressed.

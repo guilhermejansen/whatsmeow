@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/srtp"
+	"github.com/rs/zerolog"
 )
 
 // RTP WARP framing: WhatsApp's 16-byte speech / 20-byte DTX headers (extension

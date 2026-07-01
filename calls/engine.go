@@ -11,14 +11,13 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
-
+	"go.mau.fi/whatsmeow/calls/signaling"
 	"go.mau.fi/whatsmeow"
 	waBinary "go.mau.fi/whatsmeow/binary"
-	"go.mau.fi/whatsmeow/calls/signaling"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
+	"google.golang.org/protobuf/proto"
 )
 
 // engine is the internal media + signaling engine behind Client/Call. It owns the
@@ -32,13 +31,6 @@ type engine struct {
 
 	mu    sync.Mutex
 	calls map[string]*engineCall // keyed by call-id
-
-	// removeHook deregisters the low-level <call>/<ack> handler installed via
-	// Client.RegisterCallNodeHandler; eventHandlerID is the whatsmeow event-handler
-	// id returned by AddEventHandler. Both are captured in install() and released in
-	// close() so a closed Client fully detaches from the underlying whatsmeow client.
-	removeHook     func()
-	eventHandlerID uint32
 }
 
 // engineCall is the engine's per-call state: the public Call handle plus the inputs
@@ -98,7 +90,7 @@ func (c *Call) playerAndSink() (*Player, AudioSink) {
 // Call before the whatsmeow client connects.
 func (e *engine) install() {
 	e.installCallAckHook()
-	e.eventHandlerID = e.c.wa.AddEventHandler(func(evt any) {
+	e.c.wa.AddEventHandler(func(evt any) {
 		switch ev := evt.(type) {
 		case *events.CallOffer:
 			e.onOffer(ev)
@@ -156,7 +148,7 @@ func (e *engine) placeCall(ctx context.Context, target string) (*Call, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.c.log.Info().Stringer("peer_lid", peerLID).Stringer("self_lid", self).Msg("resolved peer LID")
+	e.c.log.Info().Str("peer_lid", peerLID.String()).Str("self_lid", self.String()).Msg("resolved peer LID")
 
 	devices, err := cli.GetUserDevices(ctx, []types.JID{peerLID})
 	if err != nil {
@@ -674,52 +666,6 @@ func (e *engine) stopMedia(callID string) {
 	e.mu.Unlock()
 }
 
-// abortAll ends every in-flight call immediately: it cancels each call's media
-// goroutine, marks the call ended, and fires its OnEnd listener with reason. The
-// call registry is emptied. This is the bulk teardown an integrator's disconnect
-// path drives (directly via Client.AbortAll, or through Client.Close). User OnEnd
-// callbacks run without e.mu held, so they may re-enter the engine safely.
-func (e *engine) abortAll(reason string) {
-	e.mu.Lock()
-	pending := e.calls
-	e.calls = map[string]*engineCall{}
-	e.mu.Unlock()
-
-	for _, m := range pending {
-		if m.cancel != nil {
-			m.cancel()
-		}
-		if m.call != nil {
-			m.call.setPhase(CallPhaseEnded)
-			if fn := m.call.onEndFn(); fn != nil {
-				fn(reason)
-			}
-		}
-	}
-}
-
-// close aborts every in-flight call (see abortAll) and detaches the engine's
-// whatsmeow handlers — the low-level <call>/<ack> hook and the event handler — so
-// the underlying whatsmeow client no longer dispatches into a dead engine. After
-// close the owning Client must not be reused.
-func (e *engine) close(reason string) {
-	e.abortAll(reason)
-
-	e.mu.Lock()
-	remove := e.removeHook
-	e.removeHook = nil
-	id := e.eventHandlerID
-	e.eventHandlerID = 0
-	e.mu.Unlock()
-
-	if remove != nil {
-		remove()
-	}
-	if id != 0 {
-		e.c.wa.RemoveEventHandler(id)
-	}
-}
-
 // installCallAckHook registers the engine's low-level interceptor for raw <call>
 // and <ack class="call"> nodes via the supported whatsmeow API. whatsmeow has no
 // <ack> handler of its own — it drops <ack> nodes — but an outbound call's relay
@@ -728,7 +674,7 @@ func (e *engine) close(reason string) {
 // The <call> interceptor also lets the engine see the raw stanza id (which the
 // CallOffer event drops) and send the typed type="video" ack a video upgrade needs.
 func (e *engine) installCallAckHook() {
-	e.removeHook = e.c.wa.RegisterCallNodeHandler(func(_ context.Context, node *waBinary.Node) bool {
+	e.c.wa.RegisterCallNodeHandler(func(_ context.Context, node *waBinary.Node) bool {
 		switch node.Tag {
 		case "ack":
 			// whatsmeow forwards only <ack class="call"> here.

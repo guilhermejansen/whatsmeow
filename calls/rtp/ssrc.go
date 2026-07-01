@@ -4,9 +4,8 @@ import (
 	"encoding/binary"
 	"strings"
 
-	"github.com/rs/zerolog"
-
 	"go.mau.fi/whatsmeow/calls/util"
+	"github.com/rs/zerolog"
 )
 
 // SSRC derivation and participant-LID helpers for E2E HKDF info.
