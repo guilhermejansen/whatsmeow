@@ -14,8 +14,19 @@ ships the full WhatsApp 1:1 VoIP stack natively.
    `github.com/purpshell/meowcaller` → `go.mau.fi/whatsmeow/calls`.
 4. Replace `engine.go` `installCallAckHook` (reflection + unsafe poke into the
    client's private nodeHandlers map) with `Client.RegisterCallNodeHandler` and
-   drop the `reflect`/`unsafe` imports. This is the ONLY behavioural divergence
-   from upstream.
+   drop the `reflect`/`unsafe` imports.
+
+## Fork divergences preserved across re-sync (this is NOT upstream meowcaller)
+- **Overlay file `video_fork.go`** (video_fork.go) — the fork's OUTBOUND-video
+  additions (`CallVideo`/`placeCallVideo`, `SetVideoState`/`sendVideoState`).
+  Pure additions on meowcaller types; saved before `rm -rf` and restored after, so a
+  re-sync never wipes them. **NOT VALIDATED** end-to-end (meowcaller video is initial
+  support): RTP egress is real, but the WhatsApp peer-side bridge is unproven.
+- **accept-video patch in `engine.go` `sendAccept`** — flips `AcceptParams.Video`
+  on for inbound video offers (`isVideo := m.isVideo`), so a video call answers with a
+  `<video>` node. Re-applied as an idempotent, loud-on-failure Python patch (step 4b).
+  The `AcceptParams.Video` field + `<video>` emission already exist upstream in
+  `signaling/stanza.go`.
 
 The base-library offer builder (`Client.MakeCallOffer` in call.go) duplicates the
 load-bearing offer child order from `calls/signaling/stanza.go` BuildOffer. If you

@@ -356,10 +356,15 @@ func (e *engine) sendAccept(callID string, to, creator types.JID) {
 	m.acceptPending = false
 	e.mu.Unlock()
 
+	// Mirror the offer's media: a video call MUST accept with a <video> node, or the
+	// server rejects the accept (error 500) / never negotiates video. Audio-only calls
+	// keep isVideo=false, so their accept is unchanged.
+	isVideo := m.isVideo
 	accept := signaling.BuildAccept(&signaling.AcceptParams{
 		CallID: callID, To: to, CallCreator: creator,
 		AudioRates: []string{"16000"},
 		Metadata:   waBinary.Attrs{"peer_abtest_bucket_id_list": "125208,94276"},
+		Video:      isVideo,
 	})
 	accept.Attrs["id"] = e.c.wa.DangerousInternals().GenerateRequestID()
 	if err := e.c.wa.DangerousInternals().SendNode(context.Background(), accept); err != nil {
