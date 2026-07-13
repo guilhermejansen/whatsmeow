@@ -216,6 +216,10 @@ func (cli *Client) IsOnWhatsApp(ctx context.Context, phones []string) ([]types.I
 		if err != nil {
 			cli.Log.Warnf("Failed to parse %s's verified name details: %v", jid, err)
 		}
+		// Fork: the query above already asks for these two nodes; read them back
+		// instead of discarding them. See user_fork.go.
+		info.Username = parseUsernameNode(child)
+		info.DisappearingMode = parseDisappearingModeNode(child)
 		contactNode := child.GetChildByTag("contact")
 		info.IsIn = contactNode.AttrGetter().String("type") == "in"
 		contactQuery, _ := contactNode.Content.([]byte)

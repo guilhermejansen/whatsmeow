@@ -88,6 +88,12 @@ type LocalChatSettings struct {
 	Archived   bool
 }
 
+// DisappearingMode is a contact's default disappearing-message setting.
+type DisappearingMode struct {
+	Duration time.Duration // How long messages live. Zero means disappearing messages are off.
+	SetAt    time.Time     // When the setting was last changed.
+}
+
 // IsOnWhatsAppResponse contains information received in response to checking if a phone number is on WhatsApp.
 type IsOnWhatsAppResponse struct {
 	Query string // The query string used
@@ -97,6 +103,18 @@ type IsOnWhatsAppResponse struct {
 	PhoneNumber JID
 
 	VerifiedName *VerifiedName // If the phone is a business, the verified business details.
+
+	// Fork additions. The usync query in IsOnWhatsApp already asks for both of these
+	// nodes ({Tag: "username"} and {Tag: "disappearing_mode"}), but upstream never
+	// reads the responses back, so the data was being thrown away.
+
+	// Username is the contact's WhatsApp username, if they have one. WhatsApp is
+	// still rolling usernames out, so the server usually returns an empty node and
+	// this stays empty.
+	Username string
+	// DisappearingMode is the contact's default disappearing-message setting.
+	// Nil when the server didn't report one.
+	DisappearingMode *DisappearingMode
 }
 
 // BusinessMessageLinkTarget contains the info that is found using a business message link (see Client.ResolveBusinessMessageLink)
