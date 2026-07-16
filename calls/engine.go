@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	"go.mau.fi/whatsmeow/calls/signaling"
 	"go.mau.fi/whatsmeow"
 	waBinary "go.mau.fi/whatsmeow/binary"
+	"go.mau.fi/whatsmeow/calls/signaling"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -669,6 +670,54 @@ func (e *engine) stopMedia(callID string) {
 		m.cancel = nil
 	}
 	e.mu.Unlock()
+}
+
+// callHeartbeatInterval is how often we emit the <heartbeat> keep-alive stanza on an
+// active call. WhatsApp tears a call down when its signaling heartbeat stops arriving
+// (observed ~15s window), so we send well inside it. No authoritative interval is
+// published for the <heartbeat> stanza; 5s gives ~3 beats per 15s window with margin
+// and mirrors the loose cadence of the other call keep-alives. Tunable if a live
+// terminate reason (engine.go onTerminate) says the window is tighter.
+const callHeartbeatInterval = 5 * time.Second
+
+// heartbeatLoop emits a periodic <heartbeat> stanza for callID until ctx is done. ctx is
+// the media context (mctx), so the loop dies with stopMedia when the call ends. Sending
+// the heartbeat is what keeps WhatsApp from terminating an otherwise-healthy call after
+// ~15s. A send failure is logged (tagged "call heartbeat") and skipped — one dropped beat
+// must never crash the media path — and a panic is recovered so a bad send can't take the
+// process down.
+func (e *engine) heartbeatLoop(ctx context.Context, callID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			e.c.log.Error().Interface("panic", r).Str("call_id", callID).Msg("call heartbeat loop panicked")
+		}
+	}()
+
+	m := e.lookup(callID)
+	if m == nil {
+		return
+	}
+	creator := m.creator
+
+	t := time.NewTicker(callHeartbeatInterval)
+	defer t.Stop()
+	e.c.log.Debug().Str("call_id", callID).Dur("interval", callHeartbeatInterval).Msg("call heartbeat started")
+
+	var beats uint64
+	for {
+		select {
+		case <-ctx.Done():
+			e.c.log.Debug().Str("call_id", callID).Uint64("beats", beats).Msg("call heartbeat stopped")
+			return
+		case <-t.C:
+		}
+		hb := signaling.BuildHeartbeat(callID, creator, e.c.wa.GenerateMessageID())
+		if err := e.c.wa.DangerousInternals().SendNode(context.Background(), hb); err != nil {
+			e.c.log.Warn().Err(err).Str("call_id", callID).Msg("call heartbeat send failed")
+			continue
+		}
+		beats++
+	}
 }
 
 // installCallAckHook registers the engine's low-level interceptor for raw <call>

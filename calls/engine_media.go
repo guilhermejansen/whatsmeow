@@ -354,7 +354,7 @@ func (e *engine) runMedia(ctx context.Context, callID string, call *Call, callKe
 						return fmt.Errorf("relay send binding-success: %w", err)
 					}
 					e.c.diag.Emit("stun", map[string]any{
-						"event": "binding_request_answered",
+						"event":     "binding_request_answered",
 						"tx_id_hex": hex.EncodeToString(tx[:]), "resp_hex": hex.EncodeToString(resp),
 					})
 				}
@@ -424,6 +424,9 @@ func (e *engine) runMedia(ctx context.Context, callID string, call *Call, callKe
 				if fn := call.onReadyFn(); fn != nil {
 					fn()
 				}
+				// The call is live: start the signaling heartbeat so WhatsApp doesn't
+				// terminate it after ~15s. Tied to ctx (mctx) — it stops with the call.
+				go e.heartbeatLoop(ctx, callID)
 			}
 		}
 	}
